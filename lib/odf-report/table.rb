@@ -7,6 +7,7 @@ class Table
     @name             = opts[:name]
     @collection_field = opts[:collection_field]
     @collection       = opts[:collection]
+    @parent_fields    = opts[:parent_fields]
 
     @fields = []
     @texts = []
@@ -14,6 +15,7 @@ class Table
 
     @template_rows = []
     @header           = opts[:header] || false
+    @footer           = opts[:footer] || false
     @skip_if_empty    = opts[:skip_if_empty] || false
   end
 
@@ -25,6 +27,7 @@ class Table
 
     @header = table.xpath("table:table-header-rows").empty? ? @header : false
 
+    @footer = ((@header and template_length > 2) or (!@header and template_length > 1)) ? @footer : false
 
     @collection = get_collection_from_item(row, @collection_field) if row
 
@@ -34,17 +37,17 @@ class Table
     end
 
     @collection.each do |data_item|
+      node = get_next_row
+      @tables.each    { |t| t.replace!(node, data_item) }
+      @texts.each     { |t| t.replace!(node, data_item) }
+      @fields.each    { |f| f.replace!(node, data_item) }
+      table.add_child(node)
+    end
 
-      new_node = get_next_row
-
-      @tables.each    { |t| t.replace!(new_node, data_item) }
-
-      @texts.each     { |t| t.replace!(new_node, data_item) }
-
-      @fields.each    { |f| f.replace!(new_node, data_item) }
-
-      table.add_child(new_node)
-
+    if @footer
+      node = get_footer_row
+      @parent_fields.each { |f| f.replace!(node, nil) }
+      table.add_child(node)
     end
 
     @template_rows.each_with_index do |r, i|
@@ -59,12 +62,16 @@ private
     @row_cursor = get_start_node unless defined?(@row_cursor)
 
     ret = @template_rows[@row_cursor]
-    if @template_rows.size == @row_cursor + 1
+    if @template_rows.size == @row_cursor + (@footer ? 2 : 1)
       @row_cursor = get_start_node
     else
       @row_cursor += 1
     end
     return ret.dup
+  end
+
+  def get_footer_row
+    return @template_rows.last.dup
   end
 
   def get_start_node
